@@ -9,7 +9,7 @@ trap 'rm -rf "$stage"' EXIT
 # Building each architecture separately also works with Command Line Tools only.
 swift build -c release --arch arm64
 swift build -c release --arch x86_64
-CODEXSCHEDULER_APP_DIR="$stage/CodexScheduler.app" ./scripts/build-app.sh
+CODEXSCHEDULER_APP_DIR="$stage/CodexScheduler.app" zsh scripts/build-app.sh
 
 app="$stage/CodexScheduler.app"
 arm="$PWD/.build/arm64-apple-macosx/release"
