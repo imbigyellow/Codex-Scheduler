@@ -35,11 +35,11 @@
 
 ```sh
 swift run -c release SchedulerSelfTest
-./scripts/build-app.sh
+zsh scripts/build-app.sh
 open ./build/CodexScheduler.app
 ```
 
-构建双架构发布包：`./scripts/build-release.sh`。详细架构、权限、日志与卸载说明见[开发说明](docs/DEVELOPMENT.zh-CN.md)。
+构建双架构发布包：`zsh scripts/build-release.sh`。详细架构、权限、日志与卸载说明见[开发说明](docs/DEVELOPMENT.zh-CN.md)。
 
 ## English
 
@@ -70,11 +70,11 @@ With Xcode Command Line Tools installed:
 
 ```sh
 swift run -c release SchedulerSelfTest
-./scripts/build-app.sh
+zsh scripts/build-app.sh
 open ./build/CodexScheduler.app
 ```
 
-Run `./scripts/build-release.sh` to make the universal ZIP. See the [development notes (Chinese)](docs/DEVELOPMENT.zh-CN.md) for architecture, permissions, logs, and uninstall steps.
+Run `zsh scripts/build-release.sh` to make the universal ZIP. See the [development notes (Chinese)](docs/DEVELOPMENT.zh-CN.md) for architecture, permissions, logs, and uninstall steps.
 
 ## License
 
