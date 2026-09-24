@@ -17,7 +17,7 @@
 
 ```sh
 swift run SchedulerSelfTest
-./scripts/build-app.sh
+zsh scripts/build-app.sh
 open ./build/CodexScheduler.app
 ```
 
