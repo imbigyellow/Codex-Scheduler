@@ -1,8 +1,8 @@
 # Codex Scheduler
 
-**Schedule a prompt for Codex or ChatGPT on your Mac.** A small, native, offline macOS app that sends your text at the time you choose. No account, cloud service, browser extension, or extra runtime is required.
+**Hit the Codex or ChatGPT usage limit before your work is done?** Write a continuation prompt now and schedule it for a time after your limit is expected to reset. Codex Scheduler can send it to your open conversation while you're away, so the unfinished work can continue. It's a lightweight, native, offline macOS app with no extra account, cloud service, browser extension, or runtime.
 
-**在 Mac 上定时发送提示词到 Codex 或 ChatGPT。** 这是一款轻量、原生、离线的 macOS 应用：写好内容、选好时间，到点自动发送。无需注册账号、云服务、浏览器扩展或额外运行环境。
+**Codex 或 ChatGPT 额度用完了，工作还没做完？** 先写好续接提示词，安排在预计额度重置后发送。即使人暂时不在电脑前，也能让已打开的对话继续处理未完成的工作。Codex Scheduler 是轻量、原生、离线的 macOS 应用，无需额外账号、云服务、浏览器扩展或运行环境。
 
 [Download / 下载最新版](https://github.com/imbigyellow/Codex-Scheduler/releases/latest) · [中文说明](#中文) · [English](#english) · [Development notes / 开发说明](docs/DEVELOPMENT.zh-CN.md)
 
@@ -10,11 +10,14 @@
 
 ### 适合什么场景？
 
-想让 Codex 或 ChatGPT **稍后自动收到一段提示词**，例如下班前提醒自己检查进度、明早启动一项工作，或在指定时间发送已经写好的任务。Codex Scheduler 管理一次性任务；它不是聊天机器人、云端定时服务，也不会替你选择目标 App 里的具体对话。
+例如你正在让 Codex 修改项目，额度突然用尽，但任务还没完成。把接下来要做的事写成提示词，选择**预计额度重置之后**的时间；到点后，Codex Scheduler 会尝试向目标 App 中已打开的对话粘贴并发送。你可以离开电脑，不必守着重置时间。它也适合定时启动其他一次性任务。
+
+你可以这样写续接提示词：**“继续刚才未完成的工作。先检查当前对话和项目状态，再完成剩余修改、运行测试并总结结果。”** 请预先打开正确的对话，并保持 Mac 处于可用的登录会话中。**本工具不会读取额度或检测实际重置时间；它只在你设定的时间尝试发送。**
 
 ### 优点
 
 - **轻量省资源**：SwiftUI 原生界面，单个固定的后台调度服务；监听任务变化并等待下一个时间点，没有周期轮询，也不会每添加一条任务就注册新的后台项目。
+- **额度重置后续接工作**：提前安排提示词，让未完成的任务在你不守着电脑时继续。
 - **本机运行**：提示词和任务保存在你的 Mac，程序不发送网络请求、不做遥测。
 - **关掉窗口仍可执行**：主 App 退出后，macOS LaunchAgent 继续负责调度；重新登录后会检查未完成任务。
 - **安全地避免重复发送**：每条任务只认领一次；超过预定时间 10 分钟仍未执行的任务会标记为“已错过”。
@@ -45,11 +48,14 @@ open ./build/CodexScheduler.app
 
 ### What is it for?
 
-Codex Scheduler sends a prepared prompt to the **Codex or ChatGPT macOS app at a chosen time**. Use it to start a task tomorrow morning, send a reminder to your open conversation, or queue one-off prompts for later. It does not choose a conversation or inspect the target app's chat UI.
+Suppose Codex reaches its usage limit while it is working on your project. Write down what it should do next, choose a time **after the limit is expected to reset**, and leave the conversation open. Codex Scheduler will try to paste and send that prompt in the target app at the scheduled time. Your work can continue even if you're away from the keyboard. You can also schedule other one-off prompts.
+
+For example: **“Continue the unfinished work in this conversation. Check the current project state, finish the remaining changes, run the tests, and summarize the result.”** Keep the intended conversation open and your Mac in a usable logged-in session. **The app does not read your quota or detect when it actually resets; it sends at the time you choose.**
 
 ### Why use it?
 
 - **Lightweight native app:** SwiftUI, one persistent LaunchAgent, event-driven scheduling, and no periodic polling or per-task background registrations.
+- **Continue after a usage-limit reset:** prepare the next prompt before stepping away instead of waiting at your Mac.
 - **Local and offline:** prompts and task history stay on your Mac; no network calls, telemetry, account, or third-party runtime.
 - **Works after closing the main app:** the background helper remains scheduled and checks pending tasks when you log in again.
 - **One-shot delivery:** a task is claimed once. If it becomes more than 10 minutes late, it is marked missed rather than sent unexpectedly.
