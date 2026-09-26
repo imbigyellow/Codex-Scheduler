@@ -9,6 +9,7 @@ public final class TaskStore {
     private var fileURL: URL { directory.appendingPathComponent("tasks.json") }
     private var lockURL: URL { directory.appendingPathComponent("tasks.lock") }
     private var executionLogURL: URL { directory.appendingPathComponent("executions.jsonl") }
+    private var sleepStartURL: URL { directory.appendingPathComponent("sleep-start.json") }
 
     public init(directory: URL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/CodexScheduler", isDirectory: true)) {
@@ -66,7 +67,16 @@ public final class TaskStore {
         try withLock {
             var tasks = try readUnlocked()
             guard let index = tasks.firstIndex(where: { $0.id == id }), tasks[index].status == .waiting else { return nil }
-            let decision = SchedulePolicy.decision(target: tasks[index].targetDate, now: now)
+            let background = tasks[index].target == .codex && tasks[index].codexThreadID != nil
+            let sleptThroughDeadline: Bool
+            if fileManager.fileExists(atPath: sleepStartURL.path) {
+                let start = try JSONDecoder().decode(Date.self, from: Data(contentsOf: sleepStartURL))
+                sleptThroughDeadline = tasks[index].targetDate >= start && tasks[index].targetDate <= now
+            } else {
+                sleptThroughDeadline = false
+            }
+            let decision = sleptThroughDeadline ? DueDecision.missed :
+                SchedulePolicy.decision(target: tasks[index].targetDate, now: now, background: background)
             switch decision {
             case .early: break
             case .execute:
@@ -76,10 +86,41 @@ public final class TaskStore {
             case .missed:
                 tasks[index].status = .missed
                 tasks[index].actualExecutionDate = now
-                tasks[index].error = "超过 10 分钟宽限期"
+                tasks[index].error = sleptThroughDeadline ? "预定时间电脑处于睡眠" :
+                    (background ? "未能按时执行（可能睡眠或关机）" : "超过 10 分钟宽限期")
                 try writeUnlocked(tasks)
             }
             return decision
+        }
+    }
+
+    public func recordSleepStart(at date: Date = Date()) throws {
+        try withLock {
+            try JSONEncoder().encode(date).write(to: sleepStartURL, options: .atomic)
+        }
+    }
+
+    public func hasPendingSleep() throws -> Bool {
+        try withLock { fileManager.fileExists(atPath: sleepStartURL.path) }
+    }
+
+    @discardableResult
+    public func finishSleep(at now: Date = Date()) throws -> [ScheduledTask] {
+        try withLock {
+            guard fileManager.fileExists(atPath: sleepStartURL.path) else { return [] }
+            let start = try JSONDecoder().decode(Date.self, from: Data(contentsOf: sleepStartURL))
+            var tasks = try readUnlocked()
+            var missed: [ScheduledTask] = []
+            for index in tasks.indices where tasks[index].status == .waiting &&
+                tasks[index].targetDate >= start && tasks[index].targetDate <= now {
+                tasks[index].status = .missed
+                tasks[index].actualExecutionDate = now
+                tasks[index].error = "预定时间电脑处于睡眠"
+                missed.append(tasks[index])
+            }
+            if !missed.isEmpty { try writeUnlocked(tasks) }
+            try fileManager.removeItem(at: sleepStartURL)
+            return missed
         }
     }
 

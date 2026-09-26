@@ -30,7 +30,13 @@
 3. 按界面提示为内嵌的 **SchedulerHelper** 开启 **辅助功能** 权限，返回 App 点击“刷新”。该权限让 helper 能激活目标应用、粘贴文字并按 Return；仅给主 App 授权是不够的。
 4. 在目标 App 中打开想接收提示词的对话，让输入框可用。先用“10 秒后测试发送”验证当前界面，然后安排正式任务。**安排任务后不要移动或删除 CodexScheduler.app**，后台服务使用安装位置的路径。
 
-> Mac 需要处于可登录的用户会话中。睡眠、锁屏、目标 App 的界面变化或未打开正确对话，都可能影响实际发送。程序会记录本地结果，但不能保证目标服务已经收到或处理消息。提示词以本机 JSON 明文保存；共用 Mac 时请避免写入敏感信息。
+### Codex 锁屏续聊
+
+需要发到**同一个 Codex 对话**时，在目标选 Codex，开启“后台续聊现有 Codex 对话”，填写该任务的会话 UUID（也可粘贴 `codex://threads/<UUID>` 链接）和项目目录的绝对路径。先在终端执行 `codex login status` 确认 CLI 已登录，再安排 10 秒测试。此模式调用官方 `codex exec resume <会话 ID>`，不使用键盘事件，也不需要辅助功能权限。会话 ID 必须是 Codex 任务的 ID，不能填分享快照链接；目录应与原任务工作目录一致。后台运行期间不要同时在该会话发起另一个任务。
+
+锁屏后，只要 Mac 仍处于运行状态且网络可用，调度服务可以继续该会话。macOS 的锁屏快捷键是 **Control + Command + Q（⌃⌘Q）**；Shift + Command + Q（⇧⌘Q）是退出登录。锁屏本身不等于睡眠。默认勾选“等待期间防止自动睡眠”，它会在存在待执行的后台续聊任务时阻止闲置睡眠；屏幕仍可关闭或锁定，但可能增加耗电。**真正睡眠期间 Mac 无法运行本机任务**：如果睡眠跨过预定时间，任务在唤醒后标记为“已错过”，不会补发。关机、断网或未登录时，同样不能保证准点执行。
+
+> Mac 需要处于已登录的用户会话中。传统的界面发送模式会受睡眠、锁屏、目标 App 界面变化或未打开正确对话影响；Codex 后台续聊模式的行为见上文。程序会记录本地结果，但不能保证目标服务已经收到或处理消息。提示词以本机 JSON 明文保存；共用 Mac 时请避免写入敏感信息。
 
 ### 自行构建
 
@@ -68,7 +74,11 @@ For example: **“Continue the unfinished work in this conversation. Check the c
 3. Grant **Accessibility** permission to the bundled **SchedulerHelper** when prompted, then return to the app and click Refresh. The helper needs this permission to activate the target app, paste the prompt, and press Return.
 4. Open the intended conversation in Codex or ChatGPT and make sure its input box is ready. Try the **10-second test** before scheduling a real prompt. **Do not move or delete the app after creating tasks**; the LaunchAgent stores its installed path.
 
-> Your Mac needs an active logged-in user session. Sleep, a locked screen, changes to the target app's UI, or the wrong conversation can prevent delivery. The app records its local result but cannot confirm that the remote service processed your message. Prompts are stored locally as plain-text JSON.
+> Your Mac needs a logged-in user session. The original UI delivery mode can be affected by sleep, a locked screen, changes to the target app's UI, or the wrong conversation. See the background Codex mode below for locked-screen behavior. The app records its local result but cannot confirm that the remote service processed your message. Prompts are stored locally as plain-text JSON.
+
+### Continue an existing Codex conversation while locked
+
+Select Codex and enable **Continue an existing Codex conversation in the background**. Enter the task UUID (or a `codex://threads/<UUID>` link) and its working directory. Sign in to the Codex CLI first, then try a 10-second test. This mode uses `codex exec resume` and does not need Accessibility permission. It can run while the screen is locked with **Control-Command-Q**; **Shift-Command-Q** logs out. By default, it prevents idle system sleep while such tasks are pending, which may increase battery use. If the Mac sleeps across the scheduled time, the task is marked missed after wake and is never sent late.
 
 ### Build from source
 

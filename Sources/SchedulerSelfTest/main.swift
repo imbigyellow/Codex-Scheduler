@@ -84,6 +84,15 @@ do {
     try check(SchedulePolicy.decision(target: target, now: target) == .execute, "due")
     try check(SchedulePolicy.decision(target: target, now: target.addingTimeInterval(600)) == .execute, "grace")
     try check(SchedulePolicy.decision(target: target, now: target.addingTimeInterval(601)) == .missed, "missed")
+    try check(SchedulePolicy.decision(target: target, now: target.addingTimeInterval(1), background: true) == .execute,
+              "ordinary scheduler latency")
+    try check(SchedulePolicy.decision(target: target, now: target.addingTimeInterval(31), background: true) == .missed,
+              "no late background delivery")
+    let referenceID = UUID()
+    try check(CodexThreadReference.id(from: "codex://threads/\(referenceID.uuidString)?view=review") == referenceID,
+              "Codex task link parsing")
+    try check(CodexThreadReference.id(from: "https://example.com/\(referenceID.uuidString)") == nil,
+              "reject unrelated links")
     try check(SchedulePolicy.decision(target: target, now: target.addingTimeInterval(365 * 86400)) == .missed, "next year")
 
     let first = ScheduledTask(prompt: "中文\nemoji 😀\n$(echo hello)", target: .codex,
@@ -106,6 +115,31 @@ do {
                              targetDate: Date().addingTimeInterval(-5))
     try store.add(task)
     try check(try store.all().first?.prompt == task.prompt, "unicode persistence")
+    let threadTask = ScheduledTask(prompt: "continue", target: .codex,
+                                   targetDate: Date().addingTimeInterval(-5),
+                                   codexThreadID: UUID(), codexWorkingDirectory: folder.path)
+    try store.add(threadTask)
+    try check(try store.all().first(where: { $0.id == threadTask.id })?.codexThreadID == threadTask.codexThreadID,
+              "background thread persistence")
+    try check(try store.claimIfDue(id: threadTask.id) == .execute, "background claim")
+    let sleepStart = Date(timeIntervalSince1970: 1_800_000_000)
+    let sleptThrough = ScheduledTask(prompt: "do not send", target: .codex,
+                                     targetDate: sleepStart.addingTimeInterval(60),
+                                     codexThreadID: UUID(), codexWorkingDirectory: folder.path)
+    let sleepRace = ScheduledTask(prompt: "do not race", target: .codex,
+                                  targetDate: sleepStart.addingTimeInterval(90),
+                                  codexThreadID: UUID(), codexWorkingDirectory: folder.path)
+    try store.add(sleptThrough)
+    try store.add(sleepRace)
+    try store.recordSleepStart(at: sleepStart)
+    try check(try store.hasPendingSleep(), "sleep marker recorded")
+    try check(try store.claimIfDue(id: sleepRace.id, now: sleepStart.addingTimeInterval(120)) == .missed,
+              "claim cannot send across pending sleep")
+    let sleepMisses = try store.finishSleep(at: sleepStart.addingTimeInterval(120))
+    try check(sleepMisses.map(\.id) == [sleptThrough.id], "sleep interval missed")
+    try check(try !store.hasPendingSleep(), "sleep marker cleared")
+    try check(try store.all().first(where: { $0.id == sleptThrough.id })?.status == .missed,
+              "sleep status persisted")
     try check(try store.claimIfDue(id: task.id) == .execute, "claim")
     try check(try store.claimIfDue(id: task.id) == nil, "single claim")
 
@@ -125,15 +159,15 @@ do {
     let logURL = folder.appendingPathComponent("executions.jsonl")
     try check(try Data(contentsOf: logURL).count > 0, "log exists before clear")
     let removed = try store.clearHistory()
-    try check(removed.count == 4, "only terminal tasks removed")
+    try check(removed.count == 6, "only terminal tasks removed")
     let remaining = try store.all()
-    try check(remaining.count == 2, "waiting and running remain")
+    try check(remaining.count == 3, "waiting and running remain")
     try check(remaining.contains(where: { $0.id == waiting.id }), "waiting preserved")
     try check(remaining.contains(where: { $0.id == task.id && $0.status == .running }), "running preserved")
     try check(try Data(contentsOf: logURL).isEmpty, "execution log cleared")
     try store.appendExecutionLog(logRecord, taskID: sent.id)
     try check(try Data(contentsOf: logURL).isEmpty, "cleared task cannot recreate log")
-    print("SchedulerSelfTest: 20 checks passed")
+    print("SchedulerSelfTest: checks passed")
 } catch {
     fputs("SchedulerSelfTest failed: \(error)\n", stderr)
     exit(1)

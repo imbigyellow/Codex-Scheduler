@@ -9,6 +9,10 @@ private extension Notification.Name {
 @MainActor final class SchedulerModel: ObservableObject {
     @Published var prompt = ""
     @Published var target: TargetApp = .codex
+    @Published var useBackgroundCodex = false
+    @Published var preventIdleSleep = true
+    @Published var codexThreadID = ""
+    @Published var codexWorkingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
     @Published var date = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
     @Published private(set) var tasks: [ScheduledTask] = []
     @Published private(set) var helperTrusted = false
@@ -40,8 +44,13 @@ private extension Notification.Name {
         Calendar.current.date(from: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)) ?? date
     }
     var hasValidDate: Bool { selectedDate > Date() }
-    var canSchedule: Bool { hasPrompt && hasValidDate && helperTrusted && !isScheduling }
-    var canTest: Bool { hasPrompt && helperTrusted && !isScheduling }
+    var backgroundReady: Bool {
+        CodexThreadReference.id(from: codexThreadID) != nil &&
+        FileManager.default.fileExists(atPath: codexWorkingDirectory)
+    }
+    var deliveryReady: Bool { target == .codex && useBackgroundCodex ? backgroundReady : helperTrusted }
+    var canSchedule: Bool { hasPrompt && hasValidDate && deliveryReady && !isScheduling }
+    var canTest: Bool { hasPrompt && deliveryReady && !isScheduling }
 
     init() {
         reloadTasks()
@@ -87,13 +96,20 @@ private extension Notification.Name {
 
     func schedule(test: Bool = false) async -> ScheduledTask? {
         guard hasPrompt else { errorMessage = "请输入提示词"; return nil }
-        guard helperTrusted else { errorMessage = "请先开启自动化权限"; return nil }
+        guard deliveryReady else {
+            errorMessage = target == .codex && useBackgroundCodex ? "请填写有效的会话 ID 和项目目录" : "请先开启自动化权限"
+            return nil
+        }
         let when = test ? Date().addingTimeInterval(10) : selectedDate
         guard when > Date() else { errorMessage = "请选择未来的发送时间"; return nil }
         guard !isScheduling else { return nil }
 
         let text = prompt
         let app = target
+        let threadID = app == .codex && useBackgroundCodex
+            ? CodexThreadReference.id(from: codexThreadID) : nil
+        let workingDirectory = threadID == nil ? nil : codexWorkingDirectory
+        let preventSleep = preventIdleSleep
         let path = helperPath
         isScheduling = true
         errorMessage = nil
@@ -101,7 +117,9 @@ private extension Notification.Name {
 
         do {
             let created = try await Task.detached(priority: .userInitiated) { () throws -> ScheduledTask in
-                let task = ScheduledTask(prompt: text, target: app, targetDate: when, isTest: test)
+                let task = ScheduledTask(prompt: text, target: app, targetDate: when, isTest: test,
+                                         codexThreadID: threadID, codexWorkingDirectory: workingDirectory,
+                                         preventIdleSleep: threadID == nil ? nil : preventSleep)
                 let store = TaskStore()
                 try store.add(task)
                 do { try LaunchAgentService().ensureInstalled(helperPath: path) }
@@ -157,6 +175,10 @@ private extension Notification.Name {
     func reuse(_ task: ScheduledTask) {
         prompt = task.prompt
         target = task.target
+        useBackgroundCodex = task.codexThreadID != nil
+        preventIdleSleep = task.preventIdleSleep ?? true
+        codexThreadID = task.codexThreadID?.uuidString.lowercased() ?? ""
+        codexWorkingDirectory = task.codexWorkingDirectory ?? FileManager.default.homeDirectoryForCurrentUser.path
         date = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date().addingTimeInterval(3600)
         errorMessage = nil
     }
@@ -273,7 +295,8 @@ private struct TaskRow: View {
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 8) {
-                    Text(task.target.rawValue).foregroundStyle(.secondary)
+                    Text(task.codexThreadID == nil ? task.target.rawValue : "Codex 后台续聊")
+                        .foregroundStyle(.secondary)
                     Text("·").foregroundStyle(.tertiary)
                     Label(status.1, systemImage: status.0).foregroundStyle(status.2)
                 }
@@ -392,7 +415,10 @@ struct ContentView: View {
             Text("Codex Scheduler")
                 .font(.system(size: 16, weight: .semibold))
             Spacer()
-            if !model.permissionChecked {
+            if model.target == .codex && model.useBackgroundCodex {
+                Text(model.backgroundReady ? "后台续聊已配置" : "请填写会话 ID 和目录")
+                    .font(.caption).foregroundStyle(model.backgroundReady ? Color.secondary : Color.orange)
+            } else if !model.permissionChecked {
                 Text("正在检查…").font(.caption).foregroundStyle(.tertiary)
             } else if model.helperTrusted {
                 HStack(spacing: 6) {
@@ -447,6 +473,20 @@ struct ContentView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
             PromptComposer(prompt: $model.prompt, target: $model.target, focused: $promptFocused)
+            if model.target == .codex {
+                Toggle("后台续聊现有 Codex 对话（支持锁屏）", isOn: $model.useBackgroundCodex)
+                    .font(.subheadline)
+                if model.useBackgroundCodex {
+                    TextField("Codex 会话 ID 或 codex://threads/ 链接", text: $model.codexThreadID)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("项目目录绝对路径", text: $model.codexWorkingDirectory)
+                        .textFieldStyle(.roundedBorder)
+                    Toggle("等待期间防止自动睡眠（可能增加耗电）", isOn: $model.preventIdleSleep)
+                        .font(.caption)
+                    Text("锁屏时通过 Codex CLI 续写此会话；睡眠跨过发送时间会标记为已错过，不会补发。需已登录 Codex CLI，且会话没有正在执行的任务。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

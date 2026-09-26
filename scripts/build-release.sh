@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 
-version="1.0.0"
+version="1.1.0"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 
